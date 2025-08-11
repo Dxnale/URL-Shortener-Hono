@@ -1,32 +1,24 @@
 import { Hono } from 'hono'
 import { PrismaClient } from '@prisma/client'
-import { z } from 'zod'
+import { UrlRepository } from './repositories/url.repository'
+import { UrlService } from './services/url.service'
+import { UrlHandler } from './api/url.handler'
+import { errorHandler } from './api/middlewares/error.handler'
 
 const app = new Hono()
+
+// Dependency Injection Setup
 const prisma = new PrismaClient()
+const urlRepository = new UrlRepository(prisma)
+const urlService = new UrlService(urlRepository)
+const urlHandler = new UrlHandler(urlService)
 
-const urlSchema = z.object({
-  url: z.url()
-})
+// Middlewares
+app.use('*', errorHandler)
 
-app.post('/shorten', async (c) => {
-  const body = await c.req.json()
-  const parsed = urlSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: 'Invalid URL' }, 400)
-
-  const shortCode = Math.random().toString(36).substring(2, 8) // temporal
-  const newUrl = await prisma.url.create({
-    data: { shortCode, longUrl: parsed.data.url }
-  })
-
-  return c.json({ short: `http://localhost:3000/${newUrl.shortCode}` })
-})
-
-app.get('/:code', async (c) => {
-  const code = c.req.param('code')
-  const url = await prisma.url.findUnique({ where: { shortCode: code } })
-  if (!url) return c.json({ error: 'Not found' }, 404)
-  return c.redirect(url.longUrl, 302)
-})
+// Routes
+app.post('/shorten', (c) => urlHandler.shortenUrl(c))
+app.get('/:code', (c) => urlHandler.redirectUrl(c))
 
 export default app
+
