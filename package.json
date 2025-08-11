@@ -3,20 +3,30 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^24.2.1",
+    "dotenv": "^17.2.1",
     "prisma": "^6.13.0",
     "tsx": "^4.20.3",
-    "vitest": "^3.2.4"
-  },
-  "peerDependencies": {
+    "vitest": "^3.2.4",
     "typescript": "^5.9.2"
   },
+  
   "dependencies": {
     "@hono/node-server": "^1.18.1",
     "@prisma/client": "^6.13.0",
     "hono": "^4.9.0",
+    "nanoid": "^5.1.5",
     "pino": "^9.8.0",
     "zod": "^4.0.17"
   }
