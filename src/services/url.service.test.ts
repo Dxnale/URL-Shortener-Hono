@@ -1,80 +1,115 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { UrlService } from './url.service'
-import type { UrlRepository } from '../repositories/url.repository'
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { UrlRepository } from "../repositories/url.repository";
+import { UrlService } from "./url.service";
 
-// Mock nanoid to produce deterministic values in tests
-vi.mock('nanoid', () => {
-  // default export for tests will be overridden per-test when needed
-  let codes = ['ABCDEFGH']
-  let i = 0
-  return {
-    nanoid: () => codes[Math.min(i++, codes.length - 1)],
-    // helper to set sequence within tests
-    __setCodes: (arr: string[]) => {
-      codes = arr
-      i = 0
-    },
-  }
-})
+// Mock nanoid
+const mockNanoid = mock(() => "ABCDEFGH");
 
-// Utility to access mock helper
-const nanoidModule = await import('nanoid') as unknown as { nanoid: () => string; __setCodes: (arr: string[]) => void }
+// Mock the nanoid module
+mock.module("nanoid", () => ({
+	nanoid: mockNanoid,
+	__esModule: true,
+	default: mockNanoid,
+}));
 
-describe('UrlService', () => {
-  let repo: UrlRepository
-  let service: UrlService
+describe("UrlService", () => {
+	let repo: UrlRepository;
+	let service: UrlService;
 
-  beforeEach(() => {
-    // fresh mocks per test
-    repo = {
-      create: vi.fn(),
-      findByCode: vi.fn(),
-    } as unknown as UrlRepository
-    service = new UrlService(repo)
-    // reset nanoid sequence
-    nanoidModule.__setCodes(['ABCDEFGH'])
-  })
+	beforeEach(() => {
+		// fresh mocks per test
+		repo = {
+			create: mock(),
+			findByCode: mock(),
+		} as unknown as UrlRepository;
+		service = new UrlService(repo);
+		// reset mocks
+		mockNanoid.mockClear();
+	});
 
-  it('creates a short URL when there is no collision', async () => {
-    repo.findByCode = vi.fn().mockResolvedValue(null) as unknown as UrlRepository['findByCode']
-    repo.create = vi.fn().mockResolvedValue({ id: 1, longUrl: 'https://example.com', shortCode: 'ABCDEFGH' }) as unknown as UrlRepository['create']
+	it("creates a short URL when there is no collision", async () => {
+		// Setup mock responses
+		const mockUrl = {
+			id: 1,
+			longUrl: "https://example.com",
+			shortCode: "ABCDEFGH",
+		};
+		repo.findByCode = mock().mockResolvedValueOnce(
+			null,
+		) as unknown as UrlRepository["findByCode"];
+		repo.create = mock().mockResolvedValueOnce(
+			mockUrl,
+		) as unknown as UrlRepository["create"];
 
-    const result = await service.createShortUrl('https://example.com')
+		const result = await service.createShortUrl("https://example.com");
 
-    expect(result).toMatchObject({ shortCode: 'ABCDEFGH', longUrl: 'https://example.com' })
-    expect(repo.findByCode).toHaveBeenCalledWith('ABCDEFGH')
-    expect(repo.create).toHaveBeenCalledWith('https://example.com', 'ABCDEFGH')
-  })
+		expect(result).toMatchObject({
+			shortCode: "ABCDEFGH",
+			longUrl: "https://example.com",
+		});
+		expect(repo.findByCode).toHaveBeenCalledWith("ABCDEFGH");
+		expect(repo.create).toHaveBeenCalledWith("https://example.com", "ABCDEFGH");
+	});
 
-  it('retries when a collision occurs and succeeds with a new code', async () => {
-    // make nanoid return two codes: first collides, second unique
-    nanoidModule.__setCodes(['DUPLICAT', 'UNIQUE12'])
+	it("retries when a collision occurs and succeeds with a new code", async () => {
+		// Setup mock responses
+		const existingUrl = {
+			id: 1,
+			longUrl: "https://other.com",
+			shortCode: "ABCDEFGH",
+		};
+		const newUrl = {
+			id: 2,
+			longUrl: "https://example.com",
+			shortCode: "NEWCODE12",
+		};
 
-    repo.findByCode = vi.fn()
-      .mockResolvedValueOnce({ id: 99, longUrl: 'https://old.com', shortCode: 'DUPLICAT' }) // collision
-      .mockResolvedValueOnce(null) // unique
+		// First call finds existing URL, second finds null (no collision)
+		repo.findByCode = mock()
+			.mockResolvedValueOnce(existingUrl) // collision
+			.mockResolvedValueOnce(null); // no collision
 
-    repo.create = vi.fn().mockResolvedValue({ id: 2, longUrl: 'https://example.com', shortCode: 'UNIQUE12' }) as unknown as UrlRepository['create']
+		repo.create = mock().mockResolvedValueOnce(
+			newUrl,
+		) as unknown as UrlRepository["create"];
 
-    const result = await service.createShortUrl('https://example.com')
+		// Make nanoid return two different codes
+		mockNanoid.mockImplementationOnce(() => "ABCDEFGH");
+		mockNanoid.mockImplementationOnce(() => "NEWCODE12");
 
-    expect(result).toMatchObject({ shortCode: 'UNIQUE12' })
-    expect(repo.findByCode).toHaveBeenNthCalledWith(1, 'DUPLICAT')
-    expect(repo.findByCode).toHaveBeenNthCalledWith(2, 'UNIQUE12')
-    expect(repo.create).toHaveBeenCalledWith('https://example.com', 'UNIQUE12')
-  })
+		const result = await service.createShortUrl("https://example.com");
 
-  it('returns long URL for an existing code', async () => {
-    repo.findByCode = vi.fn().mockResolvedValue({ id: 1, longUrl: 'https://site.com', shortCode: 'ABCDEFGH' }) as unknown as UrlRepository['findByCode']
+		// should have tried to find both codes
+		expect(repo.findByCode).toHaveBeenCalledWith("ABCDEFGH");
+		expect(repo.findByCode).toHaveBeenCalledWith("NEWCODE12");
+		// should have created with the second code
+		expect(repo.create).toHaveBeenCalledWith(
+			"https://example.com",
+			"NEWCODE12",
+		);
+		expect(result).toMatchObject({
+			shortCode: "NEWCODE12",
+			longUrl: "https://example.com",
+		});
+	});
 
-    const long = await service.getRedirectUrl('ABCDEFGH')
-    expect(long).toBe('https://site.com')
-  })
+	it("returns long URL for an existing code", async () => {
+		repo.findByCode = mock().mockResolvedValue({
+			id: 1,
+			longUrl: "https://site.com",
+			shortCode: "ABCDEFGH",
+		}) as unknown as UrlRepository["findByCode"];
 
-  it('returns null for a non-existent code', async () => {
-    repo.findByCode = vi.fn().mockResolvedValue(null) as unknown as UrlRepository['findByCode']
+		const long = await service.getRedirectUrl("ABCDEFGH");
+		expect(long).toBe("https://site.com");
+	});
 
-    const long = await service.getRedirectUrl('NO_CODE')
-    expect(long).toBeNull()
-  })
-})
+	it("returns null for a non-existent code", async () => {
+		repo.findByCode = mock().mockResolvedValueOnce(
+			null,
+		) as unknown as UrlRepository["findByCode"];
+
+		const long = await service.getRedirectUrl("NO_CODE");
+		expect(long).toBeNull();
+	});
+});

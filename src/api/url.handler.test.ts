@@ -1,82 +1,92 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { Hono } from 'hono'
-// Mock env config BEFORE importing the handler to satisfy Zod env validation
-vi.mock('../config', () => ({
-  default: {
-    BASE_URL: 'http://localhost:3000',
-    DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
-  },
-}))
-import { UrlHandler } from './url.handler'
-import type { UrlService } from '../services/url.service'
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { Hono } from "hono";
+import type { UrlService } from "../services/url.service";
+import { UrlHandler } from "./url.handler";
+
+// Mock config
+const mockConfig = {
+	BASE_URL: "http://localhost:3000",
+	DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+};
+
+// Mock the config module
+mock.module("../config", () => ({
+	default: mockConfig,
+}));
 
 function makeApp(handler: UrlHandler) {
-  const app = new Hono()
-  app.post('/shorten', (c) => handler.shortenUrl(c))
-  app.get('/:code', (c) => handler.redirectUrl(c))
-  return app
+	const app = new Hono();
+	app.post("/shorten", (c) => handler.shortenUrl(c));
+	app.get("/:code", (c) => handler.redirectUrl(c)); // Fixed method name to match UrlHandler
+	return app;
 }
 
-describe('UrlHandler (HTTP)', () => {
-  let service: UrlService
-  let handler: UrlHandler
+describe("UrlHandler", () => {
+	let handler: UrlHandler;
+	let service: UrlService;
+	let app: ReturnType<typeof makeApp>;
 
-  beforeEach(() => {
-    service = {
-      createShortUrl: vi.fn(),
-      getRedirectUrl: vi.fn(),
-    } as unknown as UrlService
-    handler = new UrlHandler(service)
-  })
+	beforeEach(() => {
+		service = {
+			createShortUrl: mock(async (longUrl: string) => ({
+				id: 1,
+				shortCode: "abc123",
+				longUrl,
+				createdAt: new Date(),
+				clicks: 0,
+			})),
+			getRedirectUrl: mock(async (code: string) => {
+				if (code === "valid") return "https://example.com";
+				return null;
+			}),
+		} as unknown as UrlService;
 
-  it('POST /shorten validates body and returns short url', async () => {
-    // @ts-ignore mocked
-    service.createShortUrl = vi.fn().mockResolvedValue({ id: 1, longUrl: 'https://example.com', shortCode: 'ABCDEFGH' })
+		handler = new UrlHandler(service);
+		app = makeApp(handler);
+	});
 
-    const app = makeApp(handler)
-    const res = await app.request('/shorten', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: 'https://example.com' })
-    })
+	it("POST /shorten should create a short URL", async () => {
+		const longUrl = "https://example.com";
+		const response = await app.request("/shorten", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ url: longUrl }),
+		});
 
-    expect(res.status).toBe(200)
-    const data = await res.json() as { short: string }
-    expect(data.short).toMatch(/http:\/\/localhost:3000\/ABCDEFGH$/)
-  })
+		expect(response.status).toBe(200);
+		const data = (await response.json()) as { short: string };
+		expect(data).toHaveProperty("short");
+		expect(service.createShortUrl).toHaveBeenCalled();
 
-  it('POST /shorten returns 400 on invalid body', async () => {
-    const app = makeApp(handler)
-    const res = await app.request('/shorten', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: 'not-a-url' })
-    })
+		// Verify the short URL is in the expected format
+		expect(data.short).toMatch(/^http:\/\/localhost:3000\/[a-zA-Z0-9_-]+$/);
+	});
 
-    // our global middleware handles zod errors in the app, but here we call handler directly without middleware
-    // since handler uses urlSchema.parse, it will throw; emulate simple 500 in this isolated test
-    // To keep this test reliable, instead assert it's not 200 and contains error text when caught upstream
-    expect([400, 500]).toContain(res.status)
-  })
+	it("POST /shorten should return 400 for invalid URL", async () => {
+		const response = await app.request("/shorten", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ url: "not-a-url" }),
+		});
 
-  it('GET /:code redirects when found', async () => {
-    // @ts-ignore mocked
-    service.getRedirectUrl = vi.fn().mockResolvedValue('https://destination.com')
+		expect(response.status).toBe(400);
+		const data = (await response.json()) as { error: string };
+		expect(data).toHaveProperty("error");
+		expect(service.createShortUrl).not.toHaveBeenCalled();
+	});
 
-    const app = makeApp(handler)
-    const res = await app.request('/ABCDEFGH')
+	it("GET /:code should redirect to the original URL", async () => {
+		const response = await app.request("/valid");
+		expect(response.status).toBe(302);
+		expect(response.headers.get("Location")).toBe("https://example.com");
+		expect(service.getRedirectUrl).toHaveBeenCalledWith("valid");
+	});
 
-    expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('https://destination.com')
-  })
-
-  it('GET /:code returns 404 when not found', async () => {
-    // @ts-ignore mocked
-    service.getRedirectUrl = vi.fn().mockResolvedValue(null)
-
-    const app = makeApp(handler)
-    const res = await app.request('/NOPE')
-
-    expect(res.status).toBe(404)
-  })
-})
+	it("GET /:code should return 404 for unknown code", async () => {
+		const response = await app.request("/invalid");
+		expect(response.status).toBe(404);
+		const data = (await response.json()) as { error: string };
+		expect(data).toHaveProperty("error");
+		expect(service.getRedirectUrl).toHaveBeenCalledWith("invalid");
+	});
+});

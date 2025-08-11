@@ -1,7 +1,7 @@
-import app from './index'
-import { serve } from '@hono/node-server'
+import { serve } from "@hono/node-server";
+import app from "./index";
 
 serve({
-  fetch: app.fetch,
-  port: 3000
-})
+	fetch: app.fetch,
+	port: 3000,
+});
