@@ -28,7 +28,7 @@ jobs:
           DATABASE_URL: postgresql://user:pass@localhost:5432/db
 
       - name: Type check
-        run: bun run build --no-install
+        run: bun run build
         env:
           # Ensure env schema passes
           BASE_URL: http://localhost:3000
