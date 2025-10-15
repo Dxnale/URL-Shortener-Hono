@@ -12,4 +12,5 @@ model Url {
   shortCode  String   @unique
   longUrl    String
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
