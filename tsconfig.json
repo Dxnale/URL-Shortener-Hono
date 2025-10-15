@@ -8,6 +8,12 @@
     "jsx": "react-jsx",
     "allowJs": true,
 
+    // Base URL and paths for absolute imports
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     // Bundler mode
     "moduleResolution": "node",
     "allowImportingTsExtensions": true,
