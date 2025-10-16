@@ -26,8 +26,18 @@ jobs:
         env:
           # Ensure env schema passes
           BASE_URL: http://localhost:3000
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DYNAMODB_TABLE_NAME: test-table
 
       - name: Run tests
         run: bun run test --silent
         env:
           BASE_URL: http://localhost:3000
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DYNAMODB_TABLE_NAME: test-table
