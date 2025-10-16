@@ -20,7 +20,7 @@ import { UrlHandler } from "./url.handler";
 
 function makeApp(handler: UrlHandler) {
 	const app = new Hono();
-	app.post("/shorten", (c) => handler.shortenUrl(c));
+	app.get("/shorten", (c) => handler.shortenUrl(c));
 	app.get("/:code", (c) => handler.redirectUrl(c));
 	return app;
 }
@@ -37,7 +37,7 @@ describe("UrlHandler (HTTP)", () => {
 		handler = new UrlHandler(service);
 	});
 
-	it("POST /shorten validates body and returns short url", async () => {
+	it("GET /shorten validates query param and returns short url", async () => {
 		service.createShortUrl = mock().mockResolvedValue({
 			id: 1,
 			longUrl: "https://example.com",
@@ -45,39 +45,21 @@ describe("UrlHandler (HTTP)", () => {
 		});
 
 		const app = makeApp(handler);
-		const res = await app.request("/shorten", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ url: "https://example.com" }),
-		});
+		const res = await app.request("/shorten?url=https://example.com");
 
 		expect(res.status).toBe(200);
-		const data = (await res.json()) as { short: string };
-		expect(data.short).toMatch(/http:\/\/localhost:3000\/ABCDEFGH$/);
+		const data = await res.text();
+		expect(data).toBe("http://localhost:3000/ABCDEFGH");
 	});
 
-	it("POST /shorten returns 400 on invalid body", async () => {
+	it("GET /shorten returns 400 on invalid query param", async () => {
 		const app = makeApp(handler);
 
-		// Test that invalid URL input causes an error response
-		// The handler should throw a ZodError for invalid URLs
-		try {
-			const res = await app.request("/shorten", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ url: "not-a-url" }),
-			});
+		const res = await app.request("/shorten?url=not-a-url");
 
-			// If we get a response, check that it's an error status
-			expect([400, 500]).toContain(res.status);
-
-			// Check that the response contains error information
-			const errorText = await res.text();
-			expect(errorText).toContain("Invalid URL format");
-		} catch (error) {
-			// If an exception is thrown directly, that's also valid
-			expect(error).toBeDefined();
-		}
+		expect(res.status).toBe(400);
+		const errorText = await res.text();
+		expect(errorText).toContain("Invalid URL format");
 	});
 
 	it("GET /:code redirects when found", async () => {

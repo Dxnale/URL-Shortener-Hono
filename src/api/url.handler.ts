@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { ZodError } from "zod";
 import env from "../config";
 import { urlSchema } from "../schemas/url.schema";
 import type { UrlService } from "../services/url.service";
@@ -7,12 +8,25 @@ export class UrlHandler {
 	constructor(private readonly urlService: UrlService) {}
 
 	async shortenUrl(c: Context) {
-		const body = await c.req.json();
-		const { url } = urlSchema.parse(body);
-		const newUrl = await this.urlService.createShortUrl(url);
-		const shortUrl = `${env.BASE_URL}/${newUrl.shortCode}`;
+		const urlParam = c.req.query("url");
+		if (!urlParam) {
+			return c.text(
+				"Error: Please provide a 'url' parameter in the query string, e.g., /shorten?url=https://example.com",
+				400,
+			);
+		}
+		try {
+			const { url } = urlSchema.parse({ url: urlParam });
+			const newUrl = await this.urlService.createShortUrl(url);
+			const shortUrl = `${env.BASE_URL}/${newUrl.shortCode}`;
 
-		return c.json({ short: shortUrl });
+			return c.text(shortUrl);
+		} catch (err) {
+			if (err instanceof ZodError) {
+				return c.text("Error: Invalid URL format", 400);
+			}
+			throw err;
+		}
 	}
 
 	async redirectUrl(c: Context) {

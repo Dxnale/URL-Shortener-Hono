@@ -17,7 +17,10 @@ const urlHandler = new UrlHandler(urlService);
 app.use("*", errorHandler);
 
 // Routes
-app.post("/shorten", (c) => urlHandler.shortenUrl(c));
+app.get("/", (c) =>
+	c.text("URL Shortener: Use /shorten?url=YOUR_URL to shorten a URL"),
+);
+app.get("/shorten", (c) => urlHandler.shortenUrl(c));
 app.get("/:code", (c) => urlHandler.redirectUrl(c));
 
 export default app;
