@@ -6,7 +6,7 @@ Un servicio de acortamiento de URLs **seguro, escalable y económico**, desarrol
 
 ## 🚀 Tecnologías principales
 - **Backend**: [HonoJS](https://hono.dev/)
-- **ORM**: [Prisma](https://www.prisma.io/)
+- **Database**: [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
 
 ---
 
@@ -15,7 +15,7 @@ Un servicio de acortamiento de URLs **seguro, escalable y económico**, desarrol
 ```mermaid
 flowchart TD
     A[Cliente / Navegador] -->|Request Short URL| B[HonoJS]
-    B -->|Query / Insert| C[(Postgres)]
+    B -->|Query / Insert| C[(DynamoDB)]
     B -->|Redirect| A
     C -->|Respuesta| B
     B -->|Respuesta| A
@@ -26,7 +26,7 @@ flowchart TD
 ### Requisitos previos
 
 * [Bun](https://bun.sh/) o Node.js >= 18
-* PostgreSQL
+* Configuración de AWS CLI y credenciales para DynamoDB local (opcional para desarrollo)
 
 ### Pasos
 
@@ -34,7 +34,6 @@ flowchart TD
 git clone https://github.com/tuusuario/url-shortener.git
 cd url-shortener
 bun install
-bunx prisma migrate dev
 bun run src/server.ts
 ```
 
@@ -56,8 +55,8 @@ https://abc123.execute-api.eu-west-1.amazonaws.com
 
 ## 📈 Roadmap
 
-* [x] Sprint 1: MVP local con HonoJS + Postgres + Prisma
-* [ ] Sprint 2: Deploy AWS Lambda + Aurora Serverless v2 + Secrets en SSM
+* [x] Sprint 1: MVP local con HonoJS + DynamoDB
+* [ ] Sprint 2: Deploy AWS Lambda + DynamoDB + Secrets en SSM
 * [ ] Sprint 3: Cache Redis + Rate-limiting
 
 ---
