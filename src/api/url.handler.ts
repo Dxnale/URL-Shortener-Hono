@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { ZodError } from "zod";
 import env from "../config";
-import { urlSchema } from "../schemas/url.schema";
+import { urlSchema } from "../config/schemas/url.schema";
 import type { UrlService } from "../services/url.service";
 
 export class UrlHandler {
