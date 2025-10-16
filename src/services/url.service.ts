@@ -1,4 +1,3 @@
-import type { Url } from "@prisma/client";
 import { nanoid } from "nanoid";
 import type { UrlRepository } from "../repositories/url.repository";
 
@@ -7,12 +6,13 @@ export class UrlService {
 
 	async createShortUrl(longUrl: string) {
 		let shortCode: string;
-		let existingUrl: Url | null = null;
+		let shortCodeExists: boolean;
 
 		do {
 			shortCode = nanoid(8);
-			existingUrl = await this.urlRepository.findByCode(shortCode);
-		} while (existingUrl !== null);
+			shortCodeExists =
+				(await this.urlRepository.findByCode(shortCode)) !== null;
+		} while (shortCodeExists);
 
 		return this.urlRepository.create(longUrl, shortCode);
 	}

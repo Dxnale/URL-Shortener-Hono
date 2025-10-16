@@ -1,4 +1,3 @@
-import { PrismaClient } from "@prisma/client";
 import { Hono } from "hono";
 import { errorHandler } from "./api/middlewares/error.handler";
 import { UrlHandler } from "./api/url.handler";
@@ -7,16 +6,12 @@ import { UrlService } from "./services/url.service";
 
 const app = new Hono();
 
-// Dependency Injection Setup
-const prisma = new PrismaClient();
-const urlRepository = new UrlRepository(prisma);
+const urlRepository = new UrlRepository();
 const urlService = new UrlService(urlRepository);
 const urlHandler = new UrlHandler(urlService);
 
-// Middlewares
 app.use("*", errorHandler);
 
-// Routes
 app.get("/", (c) =>
 	c.text("URL Shortener: Use /shorten?url=YOUR_URL to shorten a URL"),
 );

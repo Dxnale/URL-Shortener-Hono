@@ -1,15 +1,34 @@
-import type { PrismaClient } from "@prisma/client";
+import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { db, tableName } from "../lib/dynamoDB-client";
 
 export class UrlRepository {
-	constructor(private readonly prisma: PrismaClient) {}
-
+	private readonly tableName = tableName;
 	async findByCode(code: string) {
-		return this.prisma.url.findUnique({ where: { shortCode: code } });
+		const params = {
+			TableName: this.tableName,
+			Key: {
+				shortCode: code,
+			},
+		};
+		const result = await db.send(new GetCommand(params));
+
+		if (!result.Item) return null;
+		return result.Item as Record<string, string>;
 	}
 
 	async create(longUrl: string, shortCode: string) {
-		return this.prisma.url.create({
-			data: { shortCode, longUrl },
-		});
+		const params = {
+			TableName: this.tableName,
+			Item: {
+				shortCode: shortCode,
+				longUrl: longUrl,
+				createdAt: new Date().toISOString(),
+			},
+		};
+		const res = await db.send(new PutCommand(params));
+		if (res.$metadata.httpStatusCode === 200) {
+			return params.Item as Record<string, string>;
+		}
+		throw new Error("Failed to create URL");
 	}
 }
